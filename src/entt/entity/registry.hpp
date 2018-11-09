@@ -883,6 +883,10 @@ public:
     void sort(Compare compare, Sort sort = Sort{}, Args &&... args) {
         assure<Component>();
         pool<Component>().sort(std::move(compare), std::move(sort), std::forward<Args>(args)...);
+
+        std::for_each(handlers.begin(), handlers.end(), [](auto &handler) {
+            return handler ? handler->reset() : void();
+        });
     }
 
     /**
@@ -920,6 +924,10 @@ public:
         assure<To>();
         assure<From>();
         pool<To>().respect(pool<From>());
+
+        std::for_each(handlers.begin(), handlers.end(), [](auto &handler) {
+            return handler ? handler->reset() : void();
+        });
     }
 
     /**
@@ -1141,41 +1149,6 @@ public:
     }
 
     /**
-     * @brief Discards all the data structures used for a given persitent view.
-     *
-     * Persistent views occupy memory, no matter if they are in use or not.<br/>
-     * This function can be used to discard all the internal data structures
-     * dedicated to a specific persistent view, with the goal of reducing the
-     * memory pressure.
-     *
-     * @warning
-     * Attempting to use a persistent view created before calling this function
-     * results in undefined behavior. No assertion available in this case,
-     * neither in debug mode nor in release mode.
-     *
-     * @tparam Component Types of components of the persistent view.
-     */
-    template<typename... Component>
-    void discard_persistent_view() {
-        if(has_persistent_view<Component...>()) {
-            disconnect<Component...>(std::make_index_sequence<sizeof...(Component)>{});
-            handlers[handler_family::type<Component...>].reset();
-        }
-    }
-
-    /**
-     * @brief Checks if a persistent view has already been prepared.
-     * @tparam Component Types of components of the persistent view.
-     * @return True if the view has already been prepared, false otherwise.
-     */
-    template<typename... Component>
-    bool has_persistent_view() const ENTT_NOEXCEPT {
-        static_assert(sizeof...(Component) > 1);
-        const auto htype = handler_family::type<Component...>;
-        return (htype < handlers.size() && handlers[htype]);
-    }
-
-    /**
      * @brief Returns a persistent view for the given components.
      *
      * This kind of views are created on the fly and share with the registry its
@@ -1216,9 +1189,25 @@ public:
      */
     template<typename... Component>
     entt::persistent_view<Entity, Component...> persistent_view() {
-        prepare_persistent_view<Component...>();
-        (assure<Component>(), ...);
-        return { static_cast<handler_type<Component...> *>(handlers[handler_family::type<Component...>].get()), &pool<Component>()... };
+        static_assert(sizeof...(Component) > 1);
+        const auto htype = handler_family::type<Component...>;
+
+        if(!(htype < handlers.size() && handlers[htype])) {
+            if(!(htype < handlers.size())) {
+                handlers.resize(htype + 1);
+            }
+
+            if(!handlers[htype]) {
+                (assure<Component>(), ...);
+                connect<Component...>(std::make_index_sequence<sizeof...(Component)>{});
+                handlers[htype] = std::make_unique<handler_type<Component...>>();
+            }
+        }
+
+        return entt::persistent_view<Entity, Component...>{
+            static_cast<handler_type<Component...> *>(handlers[htype].get()),
+            &pool<Component>()...
+        };
     }
 
     /**

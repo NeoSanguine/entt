@@ -21,8 +21,9 @@
 * destroy overload that accepts a couple of iterators (see create)
 
 WIP: review persistent views and avoid indirection to get components
-* review prepare_persistent_view, it should read entities the other way around for otpimization purposes
-* manage sort invokations that would defeat the purpose of the indexes with an UB
 * "negative" queries on views with sort of exclude<Comp> as template parameter
 * allow for built-in parallel each if possible
 * add on-the-fly sort functionality
+* drop all the persistent views when sort is invoked on the registry (who invokes disconnect?)
+* update doc (no longer prepare and so on), ie entity.md
+* more tests required?
