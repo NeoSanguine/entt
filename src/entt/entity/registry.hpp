@@ -2,6 +2,7 @@
 #define ENTT_ENTITY_REGISTRY_HPP
 
 
+#include <array>
 #include <tuple>
 #include <vector>
 #include <memory>
@@ -44,6 +45,9 @@ class registry {
     using signal_type = sigh<void(registry &, const Entity)>;
     using traits_type = entt_traits<Entity>;
 
+    template<typename... Component>
+    using handler_type = sparse_set<Entity, std::array<typename sparse_set<Entity>::size_type, sizeof...(Component)>>;
+
     template<typename Component>
     struct component_pool: sparse_set<Entity, Component> {
         component_pool(registry *reg) ENTT_NOEXCEPT
@@ -76,17 +80,27 @@ class registry {
         registry *reg;
     };
 
-    template<auto *Type, typename... Component>
+    template<auto Has, typename... Component>
     static void creating(registry &reg, const Entity entity) {
-        if(reg.has<Component...>(entity)) {
-            reg.handlers[*Type]->construct(entity);
+        if((reg.*Has)(entity)) {
+            auto *handler = static_cast<handler_type<Component...> *>(reg.handlers[handler_family::type<Component...>].get());
+            handler->construct(entity, std::array{ reg.pool<Component>().sparse_set<Entity>::get(entity)... });
         }
     }
 
-    template<typename... Component>
+    template<typename Comp, std::size_t Index, typename... Component>
     static void destroying(registry &reg, const Entity entity) {
-        auto &handler = *reg.handlers[handler_family::type<Component...>];
-        return handler.has(entity) ? handler.destroy(entity) : void();
+        auto *handler = static_cast<handler_type<Component...> *>(reg.handlers[handler_family::type<Component...>].get());
+        const sparse_set<Entity> &cpool = reg.pool<Comp>();
+        const auto last = *cpool.cbegin();
+
+        if(handler->has(last)) {
+            handler->get(last)[Index] = cpool.get(entity);
+        }
+
+        if(handler->has(entity)) {
+            handler->destroy(entity);
+        }
     }
 
     template<typename Component>
@@ -108,8 +122,8 @@ class registry {
 
     template<typename Comp, std::size_t Index, typename... Component, std::size_t... Indexes>
     void connect(std::index_sequence<Indexes...>) {
-        pool<Comp>().construction().template connect<&registry::creating<&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Index ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
-        pool<Comp>().destruction().template connect<&registry::destroying<Component...>>();
+        pool<Comp>().construction().template connect<&registry::creating<&registry::has<std::tuple_element_t<(Indexes < Index ? Indexes : (Indexes+1)), std::tuple<Component...>>...>, Component...>>();
+        pool<Comp>().destruction().template connect<&registry::destroying<Comp, Index, Component...>>();
     }
 
     template<typename... Component, std::size_t... Indexes>
@@ -120,8 +134,8 @@ class registry {
 
     template<typename Comp, std::size_t Index, typename... Component, std::size_t... Indexes>
     void disconnect(std::index_sequence<Indexes...>) {
-        pool<Comp>().construction().template disconnect<&registry::creating<&handler_family::type<Component...>, std::tuple_element_t<(Indexes < Index ? Indexes : (Indexes+1)), std::tuple<Component...>>...>>();
-        pool<Comp>().destruction().template disconnect<&registry::destroying<Component...>>();
+        pool<Comp>().construction().template disconnect<&registry::creating<&registry::has<std::tuple_element_t<(Indexes < Index ? Indexes : (Indexes+1)), std::tuple<Component...>>...>, Component...>>();
+        pool<Comp>().destruction().template disconnect<&registry::destroying<Comp, Index, Component...>>();
     }
 
     template<typename... Component, std::size_t... Indexes>
@@ -1117,11 +1131,11 @@ public:
 
         if(!handlers[htype]) {
             connect<Component...>(std::make_index_sequence<sizeof...(Component)>{});
-            handlers[htype] = std::make_unique<sparse_set<entity_type>>();
-            auto &handler = *handlers[htype];
+            handlers[htype] = std::make_unique<handler_type<Component...>>();
+            auto *handler = static_cast<handler_type<Component...> *>(handlers[htype].get());
 
             for(auto entity: view<Component...>()) {
-                handler.construct(entity);
+                handler->construct(entity, std::array{ pool<Component>().sparse_set<Entity>::get(entity)... });
             }
         }
     }
@@ -1204,7 +1218,7 @@ public:
     entt::persistent_view<Entity, Component...> persistent_view() {
         prepare_persistent_view<Component...>();
         (assure<Component>(), ...);
-        return { handlers[handler_family::type<Component...>].get(), &pool<Component>()... };
+        return { static_cast<handler_type<Component...> *>(handlers[handler_family::type<Component...>].get()), &pool<Component>()... };
     }
 
     /**

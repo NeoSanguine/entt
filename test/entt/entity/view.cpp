@@ -226,6 +226,38 @@ TEST(PersistentView, Sort) {
     }
 }
 
+TEST(PersistentView, IndexRebuiltOnDestroy) {
+    entt::registry<> registry;
+    registry.prepare_persistent_view<int, unsigned int>();
+
+    const auto e0 = registry.create();
+    const auto e1 = registry.create();
+
+    registry.assign<unsigned int>(e0, 0u);
+    registry.assign<unsigned int>(e1, 1u);
+
+    registry.assign<int>(e0, 0);
+    registry.assign<int>(e1, 1);
+
+    registry.destroy(e0);
+    registry.assign<int>(registry.create(), 42);
+
+    auto view = registry.persistent_view<int, unsigned int>();
+
+    ASSERT_EQ(view.size(), typename decltype(view)::size_type{1});
+    ASSERT_EQ(view[{}], e1);
+    ASSERT_EQ(view.get<int>(e1), 1);
+    ASSERT_EQ(view.get<unsigned int>(e1), 1u);
+
+    view.each([e1](auto entity, auto ivalue, auto uivalue) {
+        ASSERT_EQ(entity, e1);
+        ASSERT_EQ(ivalue, 1);
+        ASSERT_EQ(uivalue, 1u);
+    });
+
+    // TODO
+}
+
 TEST(SingleComponentView, Functionalities) {
     entt::registry<> registry;
     auto view = registry.view<char>();
