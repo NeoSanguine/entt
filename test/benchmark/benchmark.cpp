@@ -288,8 +288,6 @@ TEST(Benchmark, IterateTwoComponentsRuntime1M) {
         timer.elapsed();
     };
 
-    registry.persistent_view<position, velocity>().initialize();
-
     test([](auto) {});
     test([&registry](auto entity) {
         registry.get<position>(entity).x = {};
@@ -497,8 +495,6 @@ TEST(Benchmark, IterateFiveComponentsRuntime1M) {
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
         timer.elapsed();
     };
-
-    registry.persistent_view<position, velocity, comp<1>, comp<2>, comp<3>>().initialize();
 
     test([](auto) {});
     test([&registry](auto entity) {
@@ -764,8 +760,6 @@ TEST(Benchmark, IterateTenComponentsRuntime1M) {
         registry.runtime_view(std::begin(types), std::end(types)).each(func);
         timer.elapsed();
     };
-
-    registry.persistent_view<position, velocity, comp<1>, comp<2>, comp<3>, comp<4>, comp<5>, comp<6>, comp<7>, comp<8>>().initialize();
 
     test([](auto) {});
     test([&registry](auto entity) {
