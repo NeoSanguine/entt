@@ -84,7 +84,7 @@ class registry {
     static void creating(registry &reg, const Entity entity) {
         if((reg.*Has)(entity)) {
             auto *handler = static_cast<handler_type<Component...> *>(reg.handlers[handler_family::type<Component...>].get());
-            handler->construct(entity, std::array{ reg.pool<Component>().sparse_set<Entity>::get(entity)... });
+            handler->construct(entity, reg.pool<Component>().sparse_set<Entity>::get(entity)...);
         }
     }
 
@@ -1135,7 +1135,7 @@ public:
             auto *handler = static_cast<handler_type<Component...> *>(handlers[htype].get());
 
             for(auto entity: view<Component...>()) {
-                handler->construct(entity, std::array{ pool<Component>().sparse_set<Entity>::get(entity)... });
+                handler->construct(entity, pool<Component>().sparse_set<Entity>::get(entity)...);
             }
         }
     }
